@@ -3,7 +3,7 @@
 # XID: x00158589
 #
 conc_users=$1
-t_seconds=15
+t_seconds=5
 start_date=$(date +%F)
 start_time=$(date +%T)
 error_msg="ERROR:" 
@@ -26,7 +26,7 @@ echo "Start:" $start_date $start_time > $result_data_file
 # header of the result.dat file
 printf "%4s" "CO" >> $result_data_file
 printf "%3s" "N" >> $result_data_file
-printf "%7s\n" "Idle" >> $result_data_file
+printf "%7s\n" "usr" >> $result_data_file
 
 for ((i=1 ; i <= conc_users; i++))
 do
@@ -39,9 +39,9 @@ do
 	sleep $t_seconds
 
 	get_co_counted=$(grep 'Complete' $synth_data_file | wc -l)
-	get_idle=$(mpstat | tail -n 1 | awk '{print $12}')
+	get_idle=$(mpstat | tail -n 1 | awk '{print $3}')
 
-	printf "%4d" $get_co_counted >> $result_data_file
+	printf "%3d" $get_co_counted >> $result_data_file
 	printf " %3d" $i >> $result_data_file
 	printf " %6.2f\n" $get_idle >> $result_data_file
 
