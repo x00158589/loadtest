@@ -11,12 +11,14 @@ start_time=$(date +%T)	# test start time
 test_app='loadtest'	# application which stresses CPU with N concurent users
 synth_data_file='synthetic.dat'	# Synthetic data file loadtest generates
 result_data_file='results.dat'
+alltimesdata='allresults.dat' # gathering all the data from all runs of the loadtest, just without header "Co N Idle" for easier processing on tableau
 error_msg="ERROR:" 
 ok_msg="OK:"
 
 # It makes sence to put extra column in the report, because sometimes when testing time is too short (1 sec)
-# then the results can be misleading. This modification would alow to proccess several time and collect more data
-# to get average values. By default time=10sec, unles specified otherwise.
+# the results can be misleading. This modification would alow to proccess the test several times using different
+# loadtest running time and collect more data (copying it to one file at the end to get the average value. 
+# By default time=10sec, unles specified otherwise.
 if [ -n $2 ] && [[ $2 -gt 0 ]]; then t_seconds=$2; fi
 
 # checking if argument with value of N>0 is keyed in (test will run up to N concurent users)
@@ -31,13 +33,9 @@ if [ $cpu -gt $vm_cpu ]; then echo $error_msg "No of CPUs=$cpu > that" $vm_cpu
    else echo $ok_msg "VM has $cpu CPU(s)." "Test for N="$conc_users "cycles. From 1 to" $conc_users "concurent users"
 fi
 
-#Start of the test written in to the results.dad header. Remove before importing to Tableau or Excel.
 echo "Start:" $start_date $start_time". Time T=" $t_seconds "seconds for each cycle."
 
-#commented purposely: this line initiates a new file for each run. To have all data from all runs use >> $result_data_file
-#echo "Start:" $start_date $start_time", VM has" $vm_cpu". Each N cycle time T=" $t_seconds "seconds."> $result_data_file
-
-# starting to write into the data file.  
+# starting to write into the results.dat file.  
 echo "Co N Idle T" > $result_data_file
 
 #Cycle tests the CPU with up N concurent users.
@@ -53,14 +51,15 @@ do
 	printf " started Pid=%6s ..." $cmdpid
 
 	sleep $t_seconds    # giving some time for CPU stress. loadtest generates the data: how many were completed
-	#Calculating how many times the N concurent users were completely served
+	
+	# Calculating how many times the N concurent users were completely served
 	get_co_counted=$(grep 'Complete' $synth_data_file | wc -l)
 	
-	#if NOT using JSON format can do this way:
-	#idleCPU=$(mpstat | tail -n 1 | awk '{print $12}') where 12 is a column number in mpstat
+	# if NOT using JSON format can do this way:
+	# idleCPU=$(mpstat | tail -n 1 | awk '{print $12}') where 12 is a column number in mpstat
 
-	#each time json_string assigned in each cycle - the new mpstat data collected
-	json_string=$(mpstat -o JSON | grep '\"cpu\"')	#filtering only the string needed for data
+	# each time json_string assigned in each cycle - the new mpstat data collected
+	json_string=$(mpstat -o JSON | grep '\"cpu\"')	# filtering only the string needed for data
 	idleCPU=$(echo $json_string | jq -r '."'"$par_coll"'"')
 
 	# if counting particular CPU utilization can use:
@@ -69,24 +68,24 @@ do
 	#	utilCPU=$(echo "scale=2; $utilCPU + $(echo $json_string | jq -r '.irq')" | bc)
 	#	utilCPU=$(echo "scale=2; $utilCPU + $(echo $json_string | jq -r '.soft')" | bc)
 
-	#writing collected data to file
+	#writing collected data to the results.dat file
 	#printf "%3d" $get_co_counted >> $result_data_file
 	#printf " %3d" $i >> $result_data_file
 	#printf " %6.2f\n" $idleCPU >> $result_data_file
-	# this format shown above is not good for the tableau to import. I has to be separated by space or semicolon
+	# This output formating (shown above) is nice to look at, but not good for the tableau to import. 
+	# It has to be separated by space or semicolon
 	
 	# simply leaving separation by space
 	echo $get_co_counted $i $idleCPU $t_seconds >> $result_data_file
 
 	# Telling to shell not to send us a Termination message as we "do not own" the process
 	disown $cmdpid
-	kill -9 $cmdpid	#killing the loadtest app process - analod of Ctrl+C on console
-	printf "%7s Terminated\n" $cmdpid	#Showing that on the screen
+	kill -9 $cmdpid	  # killing the loadtest process - analog of Ctrl+C on console
+	printf "%7s Terminated\n" $cmdpid	# informig about that on the screen
 done
 start_date=$(date +%F)
 start_time=$(date +%T)
 echo "Finished:" $start_date $start_time
-#echo "Finished:" $start_date $start_time >> $result_data_file
-ext=".""${result_data_file##*.}"
-filename="${result_data_file%.*}""N$conc_users""T$t_seconds""$ext"
-cp $result_data_file "$filename"
+# echo "Finished:" $start_date $start_time >> $result_data_file
+# copying the context of results.dat file to allresults.dat file without a header.
+tail -$conc_users $result_data_file >> $alltimesdata
