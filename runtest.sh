@@ -49,18 +49,21 @@ do
 	printf $test_app 
 	printf " N=%3d" $i 
 	printf " started Pid=%6s ..." $cmdpid
+	
+	# each time json_string assigned in each cycle - the new mpstat data collected
+	json_string=$(mpstat $t_seconds 1 -o JSON | grep '\"cpu\"')	# filtering only the string needed for data
+	idleCPU=$(echo $json_string | jq -r '."'"$par_coll"'"')
 
-	sleep $t_seconds    # giving some time for CPU stress. loadtest generates the data: how many were completed
-	
-	# Calculating how many times the N concurent users were completely served
-	get_co_counted=$(grep 'Complete' $synth_data_file | wc -l)
-	
 	# if NOT using JSON format can do this way:
 	# idleCPU=$(mpstat | tail -n 1 | awk '{print $12}') where 12 is a column number in mpstat
 
-	# each time json_string assigned in each cycle - the new mpstat data collected
-	json_string=$(mpstat -o JSON | grep '\"cpu\"')	# filtering only the string needed for data
-	idleCPU=$(echo $json_string | jq -r '."'"$par_coll"'"')
+	# Telling to shell not to send us a Termination message as we "do not own" the process
+	disown $cmdpid
+	kill -9 $cmdpid	  # killing the loadtest process - analog of Ctrl+C on console
+	printf "%7s Terminated\n" $cmdpid	# informig about that on the screen
+
+	# Calculating how many times the N concurent users were completely served
+	get_co_counted=$(grep 'Complete' $synth_data_file | wc -l)
 
 	# if counting particular CPU utilization can use:
 	#	utilCPU=$(echo $json_string | jq -r '.usr')
@@ -78,10 +81,6 @@ do
 	# simply leaving separation by space
 	echo $get_co_counted $i $idleCPU $t_seconds >> $result_data_file
 
-	# Telling to shell not to send us a Termination message as we "do not own" the process
-	disown $cmdpid
-	kill -9 $cmdpid	  # killing the loadtest process - analog of Ctrl+C on console
-	printf "%7s Terminated\n" $cmdpid	# informig about that on the screen
 done
 start_date=$(date +%F)
 start_time=$(date +%T)
